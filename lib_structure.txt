@@ -1,0 +1,96 @@
+Folder PATH listing
+Volume serial number is 00000242 22B8:C508
+C:\USERS\ARIHARAN\AEGIS_AI\LIB
+¦   firebase_options.dart
+¦   main.dart
+¦   
++---ai
++---core
+¦   +---constants
+¦   +---routes
+¦   +---theme
++---models
+¦       report_model.dart
+¦       
++---providers
++---screens
+¦   +---admin
+¦   ¦       admin_dashboard.dart
+¦   ¦       officer_import_screen.dart
+¦   ¦       
+¦   +---auth
+¦   ¦       login_screen.dart
+¦   ¦       register_screen.dart
+¦   ¦       
+¦   +---citizen
+¦   ¦       alerts_screen.dart
+¦   ¦       bottom_navigation.dart
+¦   ¦       citizen_dashboard.dart
+¦   ¦       emergency_contacts_screen.dart
+¦   ¦       home_screen.dart
+¦   ¦       learning_hub_screen.dart
+¦   ¦       live_stream_screen.dart
+¦   ¦       live_tracking_screen.dart
+¦   ¦       location_screen.dart
+¦   ¦       medical_profile_screen.dart
+¦   ¦       notification_screen.dart
+¦   ¦       profile_screen.dart
+¦   ¦       report_disaster_screen.dart
+¦   ¦       report_history_screen.dart
+¦   ¦       report_screen.dart
+¦   ¦       shelter_screen.dart
+¦   ¦       sos_screen.dart
+¦   ¦       weather_screen.dart
+¦   ¦       
+¦   +---common
+¦   ¦       emergency_response_screen.dart
+¦   ¦       notification_screen.dart
+¦   ¦       session_actions.dart
+¦   ¦       settings_screen.dart
+¦   ¦       
+¦   +---maps
+¦   ¦       live_map_screen.dart
+¦   ¦       
+¦   +---officer
+¦   ¦       ai_priority_reports_screen.dart
+¦   ¦       ai_test_screen.dart
+¦   ¦       analytics_screen.dart
+¦   ¦       broadcast_alert_screen.dart
+¦   ¦       disaster_reports_screen.dart
+¦   ¦       evidence_repository_screen.dart
+¦   ¦       flood_image_screen.dart
+¦   ¦       incident_report_screen.dart
+¦   ¦       live_disaster_map_screen.dart
+¦   ¦       officer_dashboard.dart
+¦   ¦       officer_registration_screen.dart
+¦   ¦       report_details_screen.dart
+¦   ¦       rescue_applications_screen.dart
+¦   ¦       rescue_video_screen.dart
+¦   ¦       
+¦   +---rescue
+¦   ¦       assigned_cases_screen.dart
+¦   ¦       case_details_screen.dart
+¦   ¦       mission_history_screen.dart
+¦   ¦       navigation_screen.dart
+¦   ¦       rescue_dashboard.dart
+¦   ¦       rescue_pending_screen.dart
+¦   ¦       rescue_profile_screen.dart
+¦   ¦       rescue_registration_screen.dart
+¦   ¦       team_members_screen.dart
+¦   ¦       victim_reports_screen.dart
+¦   ¦       
+¦   +---splash
+¦           splash_screen.dart
+¦           
++---services
+¦       ai_service.dart
+¦       auth_service.dart
+¦       location_service.dart
+¦       notification_service.dart
+¦       report_service.dart
+¦       storage_service.dart
+¦       
++---utils
++---widgets
+        dashboard_card.dart
+        
