@@ -317,6 +317,7 @@ Future<Map<String, dynamic>> analyzeReportAuthenticity({
   required Map<String, dynamic> weather,
   required int nearbyReportCount,
   Map<String, dynamic>? imageEvidence,
+  Map<String, dynamic>? satelliteEvidence,
 }) async {
   final prompt = '''
 You are AEGIS AI, an emergency disaster-report verification system.
@@ -408,6 +409,34 @@ Evidence Assessment:
 ${imageEvidence["reason"]}
 '''}
 
+================ SATELLITE EVIDENCE ================
+
+${satelliteEvidence == null ? "No satellite evidence is available." : '''
+Recent satellite image available:
+${satelliteEvidence["recentImageAvailable"]}
+
+Recent image date:
+${satelliteEvidence["recentDate"]}
+
+Recent cloud cover:
+${satelliteEvidence["recentCloudCover"]}
+
+Previous satellite image available:
+${satelliteEvidence["previousImageAvailable"]}
+
+Previous image date:
+${satelliteEvidence["previousDate"]}
+
+Previous cloud cover:
+${satelliteEvidence["previousCloudCover"]}
+
+Satellite evidence assessment:
+${satelliteEvidence["assessment"]}
+
+Satellite evidence details:
+${satelliteEvidence["details"]}
+'''}
+
 =====================================================
 
 Analyze these signals independently and then combine them.
@@ -418,13 +447,18 @@ For the final authenticity assessment, environmental and
 location-based evidence must carry more importance than the
 image or citizen description.
 
-Use this evidence priority:
+Use this evidence priority as a general guideline:
 
 1. Location-specific weather and environmental conditions
 2. Location consistency
 3. Corroboration from nearby reports
-4. Image evidence
-5. Citizen-provided information
+4. Disaster-appropriate satellite evidence
+5. Image/video evidence
+6. Citizen-provided information
+
+The actual weight of satellite evidence must depend on the
+reported disaster type and whether the satellite imagery is
+spatially and temporally suitable.
 
 You MUST evaluate:
 
@@ -434,7 +468,8 @@ You MUST evaluate:
 4. Disaster-specific environmental consistency
 5. Nearby citizen reports
 6. Image evidence
-7. Citizen-provided information
+7. Satellite evidence
+8. Citizen-provided information
 
 The image can show that a disaster is visually present, but a
 strong image alone must NOT make the overall report
@@ -455,6 +490,80 @@ reported location, confidence may increase.
 
 The final assessment must reflect the combined evidence, not
 the strongest single signal.
+
+Satellite imagery must be interpreted according to its spatial
+and temporal limitations.
+
+Use the reported disaster type to determine the importance of
+satellite evidence.
+
+DISASTER-SPECIFIC SATELLITE POLICY:
+
+1. FLOOD
+Satellite evidence may be highly useful for detecting large-area
+water expansion or surface inundation.
+Give meaningful weight to clear before/after imagery.
+
+2. LANDSLIDE
+Satellite evidence may be highly useful when the landslide affects
+a sufficiently large area.
+Look for visible large-scale terrain or surface changes.
+
+3. WILDFIRE / FOREST FIRE
+Satellite evidence may be useful for large burn scars, smoke-related
+patterns, or other large-area changes.
+Do not claim detection of a small individual fire.
+
+4. DROUGHT
+Satellite evidence may support large-area vegetation or surface
+condition changes when appropriate imagery is available.
+
+5. CYCLONE / SEVERE STORM
+Satellite imagery may provide supporting evidence of large-scale
+surface or environmental effects.
+Weather evidence remains important.
+
+6. EARTHQUAKE
+Satellite evidence is supplementary unless a large visible
+surface or structural change is detectable.
+Do not use ordinary satellite imagery as proof of a small building
+collapse.
+
+7. BUILDING COLLAPSE
+Satellite evidence is supplementary only.
+Do not claim that a specific building has collapsed from
+satellite imagery alone.
+
+8. ROAD ACCIDENT
+Satellite evidence should generally be treated as unavailable
+or supplementary because normal satellite imagery cannot reliably
+confirm an individual road accident.
+
+9. PERSON TRAPPED / MISSING PERSON
+Satellite evidence must not be treated as proof of the presence,
+absence, or condition of an individual person.
+Use citizen evidence, CCTV, or rescue-team information instead.
+
+10. OTHER SMALL OR LOCAL INCIDENTS
+Treat satellite evidence as supplementary unless a meaningful
+large-area change is clearly visible.
+
+For all disaster types:
+
+- Never invent a visible satellite change.
+- Never treat an unavailable image as evidence against the report.
+- Never treat cloud-covered imagery as proof that no change occurred.
+- Consider the image acquisition dates and the actual time gap.
+- A shorter time gap is generally more useful for before/after
+  comparison, provided both images are suitable.
+- Satellite evidence must never by itself determine the final
+  authenticity assessment.
+
+Do not claim that a satellite image proves that a specific building
+collapsed or that a specific person is present.
+
+Do not treat an unavailable or cloudy satellite image as evidence
+against the report.
 
 The citizen description must be treated as SUPPORTING INFORMATION only.
 It must never be treated as proof.
@@ -504,6 +613,12 @@ Return ONLY valid JSON in exactly this structure:
     "confidence": 94,
     "details": "Submitted image contains visible evidence relevant to the reported disaster."
   },
+
+  "satelliteAnalysis": {
+  "status": "MODERATE",
+  "confidence": 70,
+  "details": "Satellite imagery provides supplementary evidence for the reported incident."
+},
 
   "nearbyReportsAnalysis": {
     "status": "CORROBORATED",
@@ -556,6 +671,12 @@ Rules:
   UNAVAILABLE
 
 - image status must be one of:
+  STRONG
+  MODERATE
+  WEAK
+  UNAVAILABLE
+
+- satellite status must be one of:
   STRONG
   MODERATE
   WEAK
@@ -635,6 +756,153 @@ Rules:
   if (decoded is! Map<String, dynamic>) {
     throw Exception(
       'Invalid authenticity analysis format.',
+    );
+  }
+
+  return decoded;
+}
+Future<Map<String, dynamic>> analyzeSatelliteEvidence({
+  required String disasterType,
+  required String recentImageUrl,
+  required String previousImageUrl,
+}) async {
+  final recentResponse = await http.get(
+    Uri.parse(recentImageUrl),
+  );
+
+  if (recentResponse.statusCode != 200) {
+    throw Exception(
+      'Unable to download recent satellite image: '
+      '${recentResponse.statusCode}',
+    );
+  }
+
+  final previousResponse = await http.get(
+    Uri.parse(previousImageUrl),
+  );
+
+  if (previousResponse.statusCode != 200) {
+    throw Exception(
+      'Unable to download previous satellite image: '
+      '${previousResponse.statusCode}',
+    );
+  }
+
+  final prompt = '''
+You are AEGIS AI performing satellite evidence analysis.
+
+Reported disaster type:
+$disasterType
+
+You are given two satellite images of approximately the same
+location:
+
+1. PREVIOUS IMAGE
+2. RECENT IMAGE
+
+Compare the images carefully.
+
+IMPORTANT LIMITATIONS:
+
+- Do not claim that satellite imagery proves a disaster.
+- Satellite imagery may not have enough spatial resolution for
+  small buildings, individual people, vehicles, or small incidents.
+- For building collapse, road accidents, trapped persons, and
+  other small/local incidents, treat satellite evidence as
+  supplementary only.
+- For large floods, large landslides, wildfire burn scars,
+  drought, and other large-area environmental changes,
+  satellite imagery can provide meaningful evidence.
+- Do not invent a change if one is not clearly visible.
+- Cloud cover, shadows, image quality, and different acquisition
+  conditions can make comparison unreliable.
+
+Analyze:
+
+- whether the same general area is visible in both images
+- whether a meaningful large-area surface change is visible
+- whether the change is consistent with the reported disaster
+- whether the images are too cloudy or unclear for comparison
+- limitations of the imagery
+
+Return ONLY valid JSON:
+
+{
+  "status": "SUPPORTING",
+  "confidence": 78,
+  "changeDetected": true,
+  "details": "Short explanation of the visible change.",
+  "limitations": "Short explanation of important limitations."
+}
+
+Rules:
+
+status must be exactly one of:
+SUPPORTING
+NOT_SUPPORTING
+LIMITED
+UNAVAILABLE
+
+confidence must be an integer from 0 to 100.
+
+changeDetected must be true or false.
+
+Do not identify a specific collapsed building or specific person
+from satellite imagery.
+
+Do not declare the disaster definitely real or definitely fake.
+
+Do not include Markdown.
+Do not include ```json.
+''';
+
+  final recentPart = InlineDataPart(
+    'image/jpeg',
+    recentResponse.bodyBytes,
+  );
+
+  final previousPart = InlineDataPart(
+    'image/jpeg',
+    previousResponse.bodyBytes,
+  );
+
+  final response = await _model.generateContent([
+    Content.multi([
+      TextPart(prompt),
+      TextPart('PREVIOUS SATELLITE IMAGE:'),
+      previousPart,
+      TextPart('RECENT SATELLITE IMAGE:'),
+      recentPart,
+    ]),
+  ]);
+
+  final text = response.text;
+
+  if (text == null || text.trim().isEmpty) {
+    throw Exception(
+      'Gemini returned an empty satellite analysis.',
+    );
+  }
+
+  String cleaned = text.trim();
+
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned
+        .replaceFirst('```json', '')
+        .replaceFirst('```', '')
+        .trim();
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned
+        .replaceFirst('```', '')
+        .replaceFirst('```', '')
+        .trim();
+  }
+
+  final decoded = jsonDecode(cleaned);
+
+  if (decoded is! Map<String, dynamic>) {
+    throw Exception(
+      'Invalid satellite analysis format.',
     );
   }
 

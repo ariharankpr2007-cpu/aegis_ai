@@ -18,7 +18,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_verification_screen.dart';
 import 'mission_history_screen.dart';
 import 'live_cctv_devices_screen.dart';
-import 'satellite_test_screen.dart';
 
 class OfficerDashboard extends StatefulWidget {
   const OfficerDashboard({super.key});
@@ -236,6 +235,33 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
 
     int totalReports = reports.length;
 
+    int satelliteAnalyzed = 0;
+int needsReview = 0;
+
+for (final doc in reports) {
+  final data =
+      doc.data() as Map<String, dynamic>;
+
+  final satellite =
+      data["satelliteVerification"];
+
+  if (satellite != null) {
+    satelliteAnalyzed++;
+  }
+
+  if (satellite is Map) {
+    final finalAnalysis =
+        satellite["finalAegisAnalysis"];
+
+    if (finalAnalysis is Map &&
+        finalAnalysis["overallAssessment"]
+                ?.toString() ==
+            "NEEDS_REVIEW") {
+      needsReview++;
+    }
+  }
+}
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection("rescueTeams")
@@ -301,7 +327,19 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   Icons.verified_outlined,
   Colors.blue,
 ),
+_MetricCard(
+  "Satellite Analyzed",
+  satelliteAnalyzed.toString(),
+  Icons.satellite_alt,
+  Colors.blue,
+),
 
+_MetricCard(
+  "Needs Review",
+  needsReview.toString(),
+  Icons.rate_review_outlined,
+  Colors.orange,
+),
 
                    ],
         );
@@ -358,8 +396,9 @@ _action(
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const SatelliteTestScreen(),
+        builder: (_) => const DisasterReportsScreen(
+          initialStatus: "Needs Satellite",
+        ),
       ),
     );
   },

@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'report_details_screen.dart';
 
 class DisasterReportsScreen extends StatefulWidget {
-  const DisasterReportsScreen({super.key});
+  final String initialStatus;
+
+  const DisasterReportsScreen({
+    super.key,
+    this.initialStatus = "All",
+  });
 
   @override
   State<DisasterReportsScreen> createState() =>
@@ -15,6 +20,13 @@ class _DisasterReportsScreenState
 
   String selectedStatus = "All";
   String searchText = "";
+
+  @override
+void initState() {
+  super.initState();
+
+  selectedStatus = widget.initialStatus;
+}
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +76,11 @@ class _DisasterReportsScreenState
             value: "Resolved",
             child: Text("Resolved"),
           ),
+
+          DropdownMenuItem(
+  value: "Needs Satellite",
+  child: Text("Needs Satellite Verification"),
+),
 
         ],
         onChanged: (value) {
@@ -118,13 +135,44 @@ const SizedBox(height: 10),
     snapshot.data!.docs;
 
 if (selectedStatus != "All") {
-
+  if (selectedStatus == "Needs Satellite") {
   reports = reports.where((doc) {
+    final data =
+        doc.data() as Map<String, dynamic>;
 
-    return doc["status"] == selectedStatus;
+    final satelliteAlreadyDone =
+        data["satelliteVerification"] != null;
 
+    if (satelliteAlreadyDone) {
+      return false;
+    }
+
+    final disasterType =
+        (data["disasterType"] ?? "")
+            .toString()
+            .toLowerCase();
+
+    const satelliteNotSuitable = [
+      "building collapse",
+      "road accident",
+      "accident",
+      "person trapped",
+      "missing person",
+    ];
+
+    for (final type in satelliteNotSuitable) {
+      if (disasterType.contains(type)) {
+        return false;
+      }
+    }
+
+    return true;
   }).toList();
-
+} else {
+    reports = reports.where((doc) {
+      return doc["status"] == selectedStatus;
+    }).toList();
+  }
 }
   if (searchText.isNotEmpty) {
 
@@ -165,7 +213,35 @@ report["id"] = reports[index].id;
               color: Colors.red,
             ),
             title: Text(report["title"] ?? ""),
-            subtitle: Text(report["location"] ?? ""),
+            subtitle: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(report["location"] ?? ""),
+
+    const SizedBox(height: 5),
+
+    if (report["satelliteVerification"] != null)
+      const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.satellite_alt,
+            size: 15,
+            color: Colors.blue,
+          ),
+          SizedBox(width: 4),
+          Text(
+            "Satellite analyzed",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+  ],
+),
             trailing: Column(
   mainAxisAlignment: MainAxisAlignment.center,
   crossAxisAlignment: CrossAxisAlignment.end,
@@ -191,6 +267,59 @@ report["id"] = reports[index].id;
         fontWeight: FontWeight.bold,
       ),
     ),
+
+    if (report["satelliteVerification"] != null) ...[
+      const SizedBox(height: 5),
+
+      Builder(
+        builder: (context) {
+          final satellite =
+              report["satelliteVerification"]
+                  as Map<String, dynamic>?;
+
+          final analysis =
+              satellite?["finalAegisAnalysis"]
+                  as Map<String, dynamic>?;
+
+          final assessment =
+              analysis?["overallAssessment"]
+                  ?.toString();
+
+          return Column(
+  crossAxisAlignment: CrossAxisAlignment.end,
+  children: [
+    Text(
+      assessment ?? "Satellite analyzed",
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        color: assessment == "LIKELY_GENUINE"
+            ? Colors.green
+            : assessment == "LIKELY_SUSPICIOUS"
+                ? Colors.red
+                : Colors.orange,
+      ),
+    ),
+
+    if (selectedStatus == "Needs Satellite") ...[
+      const SizedBox(height: 4),
+
+      Text(
+        _satelliteReason(
+          report["disasterType"]?.toString() ?? "",
+        ),
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          fontSize: 11,
+          color: Colors.grey,
+        ),
+      ),
+    ],
+  ],
+);
+        },
+      ),
+    ],
   ],
 ),
             onTap: () {
@@ -214,4 +343,31 @@ report["id"] = reports[index].id;
 ),
     );
   }
+  String _satelliteReason(String disasterType) {
+  final type = disasterType.toLowerCase();
+
+  if (type.contains("flood")) {
+    return "Satellite: useful for large-area water change";
+  }
+
+  if (type.contains("landslide")) {
+    return "Satellite: useful for large terrain change";
+  }
+
+  if (type.contains("fire") ||
+      type.contains("wildfire")) {
+    return "Satellite: useful for large burn-area change";
+  }
+
+  if (type.contains("drought")) {
+    return "Satellite: useful for large-area surface change";
+  }
+
+  if (type.contains("cyclone") ||
+      type.contains("storm")) {
+    return "Satellite: supplementary environmental evidence";
+  }
+
+  return "Satellite: supplementary evidence";
+}
 }

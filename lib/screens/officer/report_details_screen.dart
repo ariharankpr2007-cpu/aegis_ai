@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'satellite_verification_screen.dart';
 
 class ReportDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> report;
@@ -134,8 +135,317 @@ if (widget.report["evidenceStatus"] != null)
       ),
     ),
   ),
+  const SizedBox(height: 15),
 
-const SizedBox(height: 10),
+StreamBuilder<DocumentSnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection("reports")
+      .doc(widget.report["id"])
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData ||
+        !snapshot.data!.exists) {
+      return const SizedBox.shrink();
+    }
+
+    final liveReport =
+        snapshot.data!.data()
+            as Map<String, dynamic>;
+
+    final satellite =
+        liveReport["satelliteVerification"];
+
+    if (satellite == null) {
+      return const SizedBox.shrink();
+    }
+
+    final satelliteData =
+        satellite as Map<String, dynamic>;
+
+    final analysis =
+        satelliteData["finalAegisAnalysis"]
+            as Map<String, dynamic>?;
+
+    final satelliteAI =
+        satelliteData["satelliteAIAnalysis"]
+            as Map<String, dynamic>?;
+
+    return Column(
+      children: [
+        const SizedBox(height: 15),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "🛰️ Satellite Verification",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                Text(
+                  "Recent image date: "
+                  "${satelliteData["recentDate"] ?? "Unavailable"}",
+                ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  "Previous image date: "
+                  "${satelliteData["previousDate"] ?? "Unavailable"}",
+                ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  "Recent cloud cover: "
+                  "${satelliteData["recentCloudCover"] ?? "Unknown"}%",
+                ),
+
+                if (satelliteData["previousImageUrl"] != null ||
+                    satelliteData["recentImageUrl"] != null) ...[
+                  const SizedBox(height: 15),
+
+                  Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Previous",
+                              style: TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            if (satelliteData[
+                                        "previousImageUrl"]
+                                    ?.toString()
+                                    .isNotEmpty ==
+                                true)
+                              ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                                child: Image.network(
+                                  satelliteData[
+                                          "previousImageUrl"]
+                                      .toString(),
+                                  height: 140,
+                                  width:
+                                      double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            else
+                              const Text("No image"),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Recent",
+                              style: TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            if (satelliteData[
+                                        "recentImageUrl"]
+                                    ?.toString()
+                                    .isNotEmpty ==
+                                true)
+                              ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                                child: Image.network(
+                                  satelliteData[
+                                          "recentImageUrl"]
+                                      .toString(),
+                                  height: 140,
+                                  width:
+                                      double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            else
+                              const Text("No image"),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (satelliteAI != null) ...[
+                  const SizedBox(height: 12),
+
+                  Text(
+                    "Satellite AI status: "
+                    "${satelliteAI["status"] ?? "Unavailable"}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    "Satellite confidence: "
+                    "${satelliteAI["confidence"] ?? 0}%",
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    "Change detected: "
+                    "${satelliteAI["changeDetected"] == true ? "YES" : "NO"}",
+                  ),
+                ],
+
+                if (analysis != null) ...[
+                  const SizedBox(height: 14),
+
+                  const Text(
+                    "AEGIS Final Assessment",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    "Assessment: "
+                    "${analysis["overallAssessment"] ?? "NEEDS_REVIEW"}",
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    "Confidence: "
+                    "${analysis["overallConfidence"] ?? 0}%",
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    "Recommendation: "
+                    "${analysis["officerRecommendation"] ?? "REVIEW"}",
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    analysis["summary"]?.toString() ??
+                        "No summary available.",
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        if (analysis != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 15),
+            child:
+                _buildAegisRecommendationCardFromAnalysis(
+              analysis,
+            ),
+          ),
+      ],
+    );
+  },
+),
+
+  // ================= SATELLITE VERIFICATION =================
+
+const SizedBox(height: 15),
+
+SizedBox(
+  width: double.infinity,
+  height: 48,
+  child: OutlinedButton.icon(
+    icon: const Icon(
+      Icons.satellite_alt,
+    ),
+    label: const Text(
+      "Satellite Verification",
+    ),
+    onPressed: () {
+      final latitude =
+          (widget.report["latitude"] as num?)
+              ?.toDouble();
+
+      final longitude =
+          (widget.report["longitude"] as num?)
+              ?.toDouble();
+
+      if (latitude == null ||
+          longitude == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Satellite verification unavailable: "
+              "incident location is missing.",
+            ),
+          ),
+        );
+        return;
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              SatelliteVerificationScreen(
+  reportId:
+      widget.report["id"]?.toString() ?? "",
+  latitude: latitude,
+  longitude: longitude,
+  incidentDate:
+      (widget.report["createdAt"]
+              as Timestamp?)
+          ?.toDate(),
+  disasterType:
+      widget.report["disasterType"]?.toString() ??
+          widget.report["title"]?.toString() ??
+          "Unknown",
+  report: widget.report,
+),
+        ),
+      );
+    },
+  ),
+),
+
 if (widget.report["verificationStatus"] != "Verified")
   Column(
     children: [
@@ -621,4 +931,103 @@ if (widget.report["aiAssigned"] != true) ...[
   ),
 );
   }
+  Widget _buildAegisRecommendationCardFromAnalysis(
+  Map<String, dynamic> analysis,
+) {
+  final assessment =
+      analysis["overallAssessment"]?.toString() ??
+          "NEEDS_REVIEW";
+
+  final confidence =
+      analysis["overallConfidence"] ?? 0;
+
+  final recommendation =
+      analysis["officerRecommendation"]?.toString() ??
+          "REVIEW";
+
+  String recommendationText;
+
+  switch (recommendation) {
+    case "VERIFY":
+      recommendationText =
+          "AEGIS recommends verifying this report.";
+      break;
+
+    case "INVESTIGATE":
+      recommendationText =
+          "AEGIS recommends further investigation.";
+      break;
+
+    default:
+      recommendationText =
+          "AEGIS recommends officer review.";
+  }
+
+  return Card(
+    color: Colors.blue.shade50,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.smart_toy,
+                color: Colors.blue,
+              ),
+              SizedBox(width: 8),
+              Text(
+                "AEGIS Recommendation",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            "Assessment: $assessment",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            "Confidence: $confidence%",
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            "Recommended Action: $recommendation",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(recommendationText),
+
+          const SizedBox(height: 10),
+
+          const Text(
+            "Final decision remains with the officer.",
+            style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 }

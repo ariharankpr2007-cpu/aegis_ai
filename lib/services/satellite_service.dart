@@ -81,42 +81,33 @@ class SatelliteService {
   required DateTime incidentDate,
   double radiusKm = 5,
 }) async {
-  // Search a wide window around the incident.
+  // Search recent imagery from the incident date backwards.
   final recentResults = await searchSentinel2(
     latitude: latitude,
     longitude: longitude,
     startDate: incidentDate.subtract(
-      const Duration(days: 30),
+      const Duration(days: 14),
     ),
-    endDate: incidentDate.add(
-      const Duration(days: 1),
-    ),
+    endDate: incidentDate,
     radiusKm: radiusKm,
   );
 
-  // Search an earlier period for the "before" image.
-  final previousCenter = incidentDate.subtract(
-    const Duration(days: 30),
-  );
+  if (recentResults.isEmpty) {
+    return {
+      'recentImageUrl': null,
+      'previousImageUrl': null,
+      'recentDate': 'Not available',
+      'previousDate': 'Not available',
+      'recentCloudCover': null,
+      'previousCloudCover': null,
+    };
+  }
 
-  final previousResults = await searchSentinel2(
-    latitude: latitude,
-    longitude: longitude,
-    startDate: previousCenter.subtract(
-      const Duration(days: 30),
-    ),
-    endDate: previousCenter.add(
-      const Duration(days: 1),
-    ),
-    radiusKm: radiusKm,
-  );
-
-  Map<String, dynamic>? chooseBest(
+  Map<String, dynamic>? bestScene(
     List<Map<String, dynamic>> scenes,
   ) {
     if (scenes.isEmpty) return null;
 
-    // Lowest cloud cover is preferred.
     final sorted = [...scenes];
 
     sorted.sort((a, b) {
@@ -128,49 +119,71 @@ class SatelliteService {
 
       final aCloud =
           (aProperties?['eo:cloud_cover'] as num?)
-              ?.toDouble() ??
-              100.0;
+                  ?.toDouble() ??
+              100;
 
       final bCloud =
           (bProperties?['eo:cloud_cover'] as num?)
-              ?.toDouble() ??
-              100.0;
+                  ?.toDouble() ??
+              100;
 
-      return aCloud.compareTo(bCloud);
+      final aDate =
+          DateTime.tryParse(
+            aProperties?['datetime']?.toString() ?? '',
+          );
+
+      final bDate =
+          DateTime.tryParse(
+            bProperties?['datetime']?.toString() ?? '',
+          );
+
+      // First prefer lower cloud cover.
+      final cloudCompare =
+          aCloud.compareTo(bCloud);
+
+      if (cloudCompare != 0) {
+        return cloudCompare;
+      }
+
+      // If cloud cover is similar, prefer newer.
+      if (aDate != null && bDate != null) {
+        return bDate.compareTo(aDate);
+      }
+
+      return 0;
     });
 
     return sorted.first;
   }
 
-  String? getPreviewUrl(
+  String? getPreview(
     Map<String, dynamic>? scene,
   ) {
     if (scene == null) return null;
 
     final assets =
-        scene['assets'] as Map<String, dynamic>?;
+        scene['assets']
+            as Map<String, dynamic>?;
 
-    final rendered =
+    final preview =
         assets?['rendered_preview']
             as Map<String, dynamic>?;
 
-    return rendered?['href']?.toString();
+    return preview?['href']?.toString();
   }
 
-  String getSceneDate(
+  DateTime? getSceneDate(
     Map<String, dynamic>? scene,
   ) {
-    if (scene == null) {
-      return 'Not available';
-    }
+    if (scene == null) return null;
 
     final properties =
         scene['properties']
             as Map<String, dynamic>?;
 
-    return properties?['datetime']
-            ?.toString() ??
-        'Unknown';
+    return DateTime.tryParse(
+      properties?['datetime']?.toString() ?? '',
+    );
   }
 
   double? getCloudCover(
@@ -186,30 +199,141 @@ class SatelliteService {
         ?.toDouble();
   }
 
-  final recentScene =
-      chooseBest(recentResults);
+  // Sort all recent scenes by date, newest first.
+  final recentSorted = [...recentResults];
 
-  final previousScene =
-      chooseBest(previousResults);
+  recentSorted.sort((a, b) {
+    final aDate = getSceneDate(a);
+    final bDate = getSceneDate(b);
+
+    if (aDate == null || bDate == null) {
+      return 0;
+    }
+
+    return bDate.compareTo(aDate);
+  });
+
+  // Prefer the newest reasonably clear image.
+  Map<String, dynamic>? recentScene;
+
+  for (final scene in recentSorted) {
+    final cloud = getCloudCover(scene);
+
+    if (cloud != null && cloud <= 50) {
+      recentScene = scene;
+      break;
+    }
+  }
+
+  // If no scene is below 50% cloud, use the clearest scene.
+  recentScene ??= bestScene(recentResults);
+
+  final recentDate = getSceneDate(recentScene);
+
+  if (recentDate == null) {
+    return {
+      'recentImageUrl': getPreview(recentScene),
+      'previousImageUrl': null,
+      'recentDate': 'Unknown',
+      'previousDate': 'Not available',
+      'recentCloudCover':
+          getCloudCover(recentScene),
+      'previousCloudCover': null,
+    };
+  }
+
+  // Search only BEFORE the selected recent image.
+  final previousResults =
+      await searchSentinel2(
+    latitude: latitude,
+    longitude: longitude,
+    startDate: recentDate.subtract(
+      const Duration(days: 14),
+    ),
+    endDate: recentDate.subtract(
+      const Duration(days: 1),
+    ),
+    radiusKm: radiusKm,
+  );
+
+  Map<String, dynamic>? previousScene;
+
+  if (previousResults.isNotEmpty) {
+    // Sort newest first.
+    previousResults.sort((a, b) {
+      final aDate = getSceneDate(a);
+      final bDate = getSceneDate(b);
+
+      if (aDate == null || bDate == null) {
+        return 0;
+      }
+
+      return bDate.compareTo(aDate);
+    });
+
+    // Prefer an image within roughly 7 days.
+    for (final scene in previousResults) {
+      final sceneDate =
+          getSceneDate(scene);
+
+      if (sceneDate == null) continue;
+
+      final gap =
+          recentDate.difference(sceneDate).inDays;
+
+      final cloud = getCloudCover(scene);
+
+      if (gap >= 1 &&
+    gap <= 2 &&
+    cloud != null &&
+    cloud <= 50) {
+        previousScene = scene;
+        break;
+      }
+    }
+
+    // If none found, use the nearest reasonably clear scene.
+    previousScene ??= previousResults.firstWhere(
+      (scene) {
+        final cloud =
+            getCloudCover(scene);
+
+        return cloud != null &&
+            cloud <= 70;
+      },
+      orElse: () => previousResults.first,
+    );
+  }
+
+  final previousDate =
+      getSceneDate(previousScene);
 
   return {
     'recentImageUrl':
-        getPreviewUrl(recentScene),
+        getPreview(recentScene),
 
     'previousImageUrl':
-        getPreviewUrl(previousScene),
+        getPreview(previousScene),
 
     'recentDate':
-        getSceneDate(recentScene),
+        recentDate.toIso8601String(),
 
     'previousDate':
-        getSceneDate(previousScene),
+        previousDate?.toIso8601String() ??
+            'Not available',
 
     'recentCloudCover':
         getCloudCover(recentScene),
 
     'previousCloudCover':
         getCloudCover(previousScene),
+
+    'gapDays':
+        previousDate == null
+            ? null
+            : recentDate
+                .difference(previousDate)
+                .inDays,
   };
 }
 }
