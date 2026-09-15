@@ -89,3 +89,46 @@ Officer Dashboard
 Digital Checklist
         ↓
 Checklist / Incident Report
+
+
+🔒 Project Status
+
+AEGIS is currently a development/prototype project created
+to demonstrate an emergency response and incident management
+solution.
+
+It is not intended to replace official emergency services
+or emergency response systems.
+
+---
+
+## 📸 Application Screenshots
+
+### 🏠 Application Interface
+![AEGIS Home](screenshots/home.png)
+
+### 🚨 Emergency / Incident Management
+![AEGIS Emergency](screenshots/emergency.png)
+
+### 👮 Officer Dashboard
+![AEGIS Officer Dashboard](screenshots/officer-dashboard.png)
+
+### 📋 Digital Checklist
+![AEGIS Checklist](screenshots/checklist.png)
+
+### 📊 Reports
+![AEGIS Reports](screenshots/reports.png)
+
+---
+
+👨‍💻 Developer
+
+Ariharan
+
+Web & App Developer
+
+🔗 GitHub:
+https://github.com/ariharankpr2007-cpu
+
+⭐ If you find this project interesting, feel free to explore
+the repository.
