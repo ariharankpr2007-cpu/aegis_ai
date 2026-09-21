@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../officer/report_details_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 final MapController mapController = MapController();
 
 class LiveMapScreen extends StatefulWidget {
@@ -24,6 +26,9 @@ class LiveMapScreen extends StatefulWidget {
 
 class _LiveMapScreenState extends State<LiveMapScreen> {
 
+    List<Map<String, dynamic>> _sosAlerts = [];
+  RealtimeChannel? _sosChannel;
+
   LatLng currentLocation =
     const LatLng(13.0827, 80.2707);
 
@@ -43,7 +48,20 @@ void initState() {
     currentLocation = emergencyLocation!;
   }
 
-  getLocation();
+    getLocation();
+  _loadSosAlerts();
+
+  _sosChannel = Supabase.instance.client
+      .channel('live-sos-map')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'emergency_alerts',
+        callback: (payload) {
+          _loadSosAlerts();
+        },
+      )
+      .subscribe();
 }
 
   Future<void> getLocation() async {
@@ -74,6 +92,26 @@ void initState() {
     });
   }
 
+    Future<void> _loadSosAlerts() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('emergency_alerts')
+          .select(
+            'id, citizen_name, location_text, maps_link, status, created_at',
+          )
+          .inFilter('status', ['pending', 'acknowledged'])
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+
+      setState(() {
+        _sosAlerts = List<Map<String, dynamic>>.from(data);
+      });
+    } catch (e) {
+      debugPrint('SOS MAP ERROR: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
 
@@ -87,8 +125,21 @@ void initState() {
          mapController: mapController,
 
         options: MapOptions(
-  initialCenter: currentLocation,
-  initialZoom: 15,
+  initialCenter: _sosAlerts.isNotEmpty
+    ? LatLng(
+        double.parse(
+          Uri.parse(
+            _sosAlerts.first['maps_link'],
+          ).queryParameters['query']!.split(',')[0],
+        ),
+        double.parse(
+          Uri.parse(
+            _sosAlerts.first['maps_link'],
+          ).queryParameters['query']!.split(',')[1],
+        ),
+      )
+    : currentLocation,
+initialZoom: 12,
   onMapReady: () {
     mapController.move(currentLocation, 15);
   },
@@ -100,161 +151,10 @@ void initState() {
     urlTemplate:
         'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?api_key=stadiamaps_ecc4ea2f-d5c0-4ad1-a864-34504eddc17a',
   ),
-  if (emergencyLocation != null)
-  MarkerLayer(
-    markers: [
-      Marker(
-        point: emergencyLocation!,
-        width: 70,
-        height: 70,
-        child: Tooltip(
-          message:
-              widget.emergencyTitle ??
-              "Emergency",
-          child: const Icon(
-            Icons.warning_rounded,
-            color: Colors.red,
-            size: 48,
-          ),
-        ),
-      ),
-    ],
-  ),
 
   // ---------------- REPORT MARKERS ----------------
-  
 
-  StreamBuilder<QuerySnapshot>(
-    stream: FirebaseFirestore.instance
-        .collection("reports")
-        .snapshots(),
-    builder: (context, snapshot) {
-
-      List<Marker> markers = [];
-
-      // Citizen marker
-      markers.add(
-        Marker(
-          point: currentLocation,
-          width: 20,
-          height: 20,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 3,
-              ),
-            ),
-          ),
-        ),
-      );
-
-      if (snapshot.hasData) {
-
-        for (var doc in snapshot.data!.docs) {
-
-          final report =
-              doc.data() as Map<String, dynamic>;
-
-          if (report["latitude"] != null &&
-              report["longitude"] != null) {
-
-            markers.add(
-
-              Marker(
-                point: LatLng(
-                  (report["latitude"] as num).toDouble(),
-                  (report["longitude"] as num).toDouble(),
-                ),
-                width: 60,
-                height: 60,
-                child: GestureDetector(
-                  onTap: () {
-
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: Text(report["title"] ?? ""),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-
-                            Text("📍 ${report["location"]}"),
-
-                            const SizedBox(height: 8),
-
-                            Text("🚨 ${report["severity"]}"),
-
-                            const SizedBox(height: 8),
-
-                            Text(
-                              report["description"] ?? "",
-                            ),
-
-                          ],
-                        ),
-                        actions: [
-
-  TextButton(
-    onPressed: () {
-      Navigator.pop(context);
-    },
-    child: const Text("Close"),
-  ),
-
-  ElevatedButton.icon(
-  onPressed: () {
-    Navigator.pop(context);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReportDetailsScreen(
-          report: {
-            ...report,
-            "id": doc.id,
-          },
-        ),
-      ),
-    );
-  },
-  icon: const Icon(Icons.assignment),
-  label: const Text("Assign"),
-),
-
-],
-                      ),
-                    );
-
-                  },
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.warning,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                ),
-              ),
-
-            );
-          }
-        }
-      }
-
-      return MarkerLayer(
-        markers: markers,
-      );
-    },
-  ),
+const SizedBox(),
   // ---------------- ASSIGNED RESCUE TEAM MARKERS ----------------
 
 StreamBuilder<QuerySnapshot>(
@@ -407,69 +307,121 @@ StreamBuilder<QuerySnapshot>(
     );
   },
 ),
-     MarkerLayer(
-  markers: [
 
-    Marker(
-      point: const LatLng(13.0827, 80.2707),
-      width: 60,
-      height: 60,
-      child: Tooltip(
-        message: "Government Hospital",
-        child: const Icon(
-          Icons.local_hospital,
-          color: Colors.red,
-          size: 35,
-        ),
-      ),
-    ),
 
-    Marker(
-      point: const LatLng(13.0790, 80.2750),
-      width: 60,
-      height: 60,
-      child: Tooltip(
-        message: "Fire Station",
-        child: const Icon(
-          Icons.local_fire_department,
-          color: Colors.orange,
-          size: 35,
-        ),
-      ),
-    ),
+// ---------------- SOS ALERT MARKERS ----------------
 
-    Marker(
-      point: const LatLng(13.0865, 80.2680),
-      width: 60,
-      height: 60,
-      child: Tooltip(
-        message: "Police Station",
-        child: const Icon(
-          Icons.local_police,
-          color: Colors.blue,
-          size: 35,
-        ),
-      ),
-    ),
+if (_sosAlerts.isNotEmpty)
+  MarkerLayer(
+    markers: _sosAlerts
+        .map((alert) {
+          final mapsLink = alert['maps_link']?.toString() ?? '';
+          final uri = Uri.tryParse(mapsLink);
+          final query = uri?.queryParameters['query'];
 
-    Marker(
-      point: const LatLng(13.0845, 80.2790),
-      width: 60,
-      height: 60,
-      child: Tooltip(
-        message: "Relief Shelter",
-        child: const Icon(
-          Icons.home,
-          color: Colors.green,
-          size: 35,
-        ),
-      ),
-    ),
+          if (query == null || !query.contains(',')) {
+            return null;
+          }
 
-  ],
-),
+          final coordinates = query.split(',');
+
+          if (coordinates.length != 2) {
+            return null;
+          }
+
+          final latitude = double.tryParse(coordinates[0]);
+          final longitude = double.tryParse(coordinates[1]);
+
+          if (latitude == null ||
+              longitude == null ||
+              !latitude.isFinite ||
+              !longitude.isFinite) {
+            return null;
+          }
+
+          final status = alert['status']?.toString() ?? 'pending';
+
+          final markerColor = status == 'acknowledged'
+              ? Colors.orange
+              : Colors.purple;
+
+          return Marker(
+            point: LatLng(latitude, longitude),
+            width: 90,
+            height: 90,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Emergency SOS'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Citizen: ${alert['citizen_name'] ?? 'Unknown'}',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Location: ${alert['location_text'] ?? 'Address unavailable'}',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Status: ${alert['status'] ?? 'pending'}',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Coordinates: $latitude, $longitude',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Time: ${alert['created_at'] ?? 'Unknown'}',
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: markerColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.sos,
+                  color: Colors.white,
+                  size: 42,
+                ),
+              ),
+            ),
+          );
+        })
+        .whereType<Marker>()
+        .toList(),
+  ),
                ],
       ),
     );
+    }
+
+  @override
+  void dispose() {
+    if (_sosChannel != null) {
+      Supabase.instance.client.removeChannel(_sosChannel!);
+    }
+
+    super.dispose();
   }
 }

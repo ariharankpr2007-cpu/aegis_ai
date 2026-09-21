@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'bottom_navigation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/sms_fallback_service.dart';
 
 class SosScreen extends StatefulWidget {
   final VoidCallback? onCancel;
@@ -209,19 +211,56 @@ Future<void> _updateSosHistory(
     updated,
   );
 }
+Future<Map<String, dynamic>?> _getMedicalProfile() async {
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user == null) return null;
+
+  final snapshot = await FirebaseFirestore.instance
+      .collection('medical_profiles')
+      .doc(user.uid)
+      .get();
+
+  if (!snapshot.exists) return null;
+
+  final data = snapshot.data();
+
+  if (data == null || data['shareDuringSos'] != true) {
+    return null;
+  }
+
+  return data;
+}
 Future<void> _sendSosToOfficer({
   required String locationText,
   required String mapsLink,
+  required double latitude,
+  required double longitude,
+  Map<String, dynamic>? medicalProfile,
 }) async {
   try {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw Exception('User is not logged in.');
+    }
+
     await Supabase.instance.client
         .from('emergency_alerts')
         .insert({
-      'citizen_id': FirebaseAuth.instance.currentUser!.uid,
+      'citizen_id': user.uid,
       'citizen_name': 'AEGIS Citizen',
       'location_text': locationText,
+      'latitude': latitude,
+      'longitude': longitude,
       'maps_link': mapsLink,
       'status': 'pending',
+
+      // Medical details are included only when sharing is enabled.
+      'blood_group': medicalProfile?['bloodGroup'],
+      'allergies': medicalProfile?['allergies'],
+      'medical_conditions': medicalProfile?['conditions'],
+      'medical_shared': medicalProfile != null,
     });
 
     debugPrint('SOS SUCCESSFULLY SENT TO SUPABASE');
@@ -409,10 +448,42 @@ final personalNumber =
 final mapsLink =
     'https://www.google.com/maps/search/?api=1'
     '&query=${position.latitude},${position.longitude}';
-    await _sendSosToOfficer(
-  locationText: locationText,
-  mapsLink: mapsLink,
-);
+    final medicalProfile = await _getMedicalProfile();
+
+try {
+  await _sendSosToOfficer(
+    locationText: locationText,
+    mapsLink: mapsLink,
+    latitude: position.latitude,
+    longitude: position.longitude,
+    medicalProfile: medicalProfile,
+  );
+} catch (e) {
+  debugPrint('Internet SOS failed: $e');
+
+  // Internet failed → try cellular SMS fallback.
+  if (personalNumber != null &&
+      personalNumber.isNotEmpty) {
+    final smsSuccess =
+        await SmsFallbackService.sendEmergencySms(
+      phoneNumber: personalNumber,
+      emergencyType: 'AEGIS EMERGENCY SOS',
+      latitude: position.latitude,
+      longitude: position.longitude,
+      victims: 1,
+    );
+
+    debugPrint(
+      smsSuccess
+          ? 'SMS FALLBACK SUCCESS'
+          : 'SMS FALLBACK FAILED',
+    );
+  } else {
+    debugPrint(
+      'No personal emergency contact number available.',
+    );
+  }
+}
 if (!mounted) return;
 
 setState(() {
@@ -646,10 +717,15 @@ void dispose() {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Send an SOS only during an emergency. Your saved details and location will be shared when the backend is connected.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.black54),
-              ),
+  'Send an SOS only during an emergency. '
+  'Your current location will be shared with the rescue team. '
+  'Medical details will be shared only if medical sharing is enabled.',
+  textAlign: TextAlign.center,
+  style: TextStyle(
+    fontSize: 16,
+    color: Colors.black54,
+  ),
+),
               if (_sending) ...[
   const CircularProgressIndicator(
     color: Colors.red,

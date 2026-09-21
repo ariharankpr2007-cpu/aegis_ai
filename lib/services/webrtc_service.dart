@@ -86,15 +86,15 @@ class WebRtcService {
   // ============================================================
 
   Future<void> startBroadcast(
-    String deviceId,
-  ) async {
+  String deviceId, {
+  String collection = 'cctvCalls',
+}) async {
     await _cleanupConnectionOnly();
 
     _remoteDescriptionSet = false;
 
-    final callRef = _firestore
-        .collection('cctvCalls')
-        .doc(deviceId);
+    final callRef =
+    _firestore.collection(collection).doc(deviceId);
 
     // Clear old connection data
     await _deleteCandidates(
@@ -305,16 +305,16 @@ _peerConnection!.onIceConnectionState =
   // ============================================================
 
   Future<void> startWatching(
-    String deviceId,
-    Function(MediaStream stream) onRemoteStream,
-  ) async {
+  String deviceId,
+  Function(MediaStream stream) onRemoteStream, {
+  String collection = 'cctvCalls',
+}) async {
     await _cleanupConnectionOnly();
 
     _remoteDescriptionSet = false;
 
-    final callRef = _firestore
-        .collection('cctvCalls')
-        .doc(deviceId);
+    final callRef =
+    _firestore.collection(collection).doc(deviceId);
 
     final callSnapshot =
         await callRef.get();
@@ -481,6 +481,32 @@ _peerConnection!.onIceConnectionState =
       'status': 'connected',
     });
   }
+  // ================= CITIZEN LIVE STREAM =================
+
+Future<void> startCitizenBroadcast(String streamId) async {
+  await startBroadcast(
+    streamId,
+    collection: 'citizenLiveCalls',
+  );
+}
+
+Future<void> watchCitizenBroadcast(
+  String streamId,
+  Function(MediaStream stream) onRemoteStream,
+) async {
+  await startWatching(
+    streamId,
+    onRemoteStream,
+    collection: 'citizenLiveCalls',
+  );
+}
+
+Future<void> stopCitizenBroadcast(String streamId) async {
+  await stopBroadcast(
+    streamId,
+    collection: 'citizenLiveCalls',
+  );
+}
 
   // ============================================================
   // OLD METHOD COMPATIBILITY
@@ -512,8 +538,9 @@ _peerConnection!.onIceConnectionState =
   // ============================================================
 
   Future<void> stopBroadcast(
-    String deviceId,
-  ) async {
+  String deviceId, {
+  String collection = 'cctvCalls',
+}) async {
     await _cleanupConnectionOnly();
 
     for (final track
@@ -524,9 +551,8 @@ _peerConnection!.onIceConnectionState =
     _localStream = null;
     _remoteStream = null;
 
-    final callRef = _firestore
-        .collection('cctvCalls')
-        .doc(deviceId);
+    final callRef =
+    _firestore.collection(collection).doc(deviceId);
 
     await _deleteCandidates(
       callRef.collection('offerCandidates'),

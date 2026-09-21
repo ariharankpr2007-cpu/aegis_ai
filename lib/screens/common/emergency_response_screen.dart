@@ -252,11 +252,7 @@ class _EmergencyResponseScreenState
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => LiveMapScreen(
-  emergencyLatitude: latitude,
-  emergencyLongitude: longitude,
-  emergencyTitle: disasterType.toString(),
-),
+            builder: (_) => const LiveMapScreen(),
             
           ),
         );

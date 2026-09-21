@@ -453,9 +453,9 @@ Future<void> _submit() async {
 
     // 2. Create report reference
     final reportRef =
-        FirebaseFirestore.instance
-            .collection('reports')
-            .doc();
+    FirebaseFirestore.instance
+        .collection('reports')
+        .doc();
 
     // 3. Save disaster report
     await reportRef.set({

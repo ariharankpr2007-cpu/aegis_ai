@@ -268,11 +268,16 @@ final officerId = FirebaseAuth.instance.currentUser?.uid;
                       return _AlertCard(
                         alert: alert,
                         onAcknowledge: () =>
-                            _acknowledgeAlert(alert['id'] as int),
+                            _acknowledgeAlert(int.parse(alert['id'].toString())),
                         onResolve: () =>
-                            _resolveAlert(alert['id'] as int),
-                        onOpenMaps: () =>
-                            _openMaps(alert['maps_link'] ?? ''),
+                            _resolveAlert(int.parse(alert['id'].toString())),
+                        onOpenMaps: () {
+  final mapsLink = alert['maps_link']?.toString();
+
+  if (mapsLink != null && mapsLink.isNotEmpty) {
+    _openMaps(mapsLink);
+  }
+},
                       );
                     },
                   ),
@@ -316,6 +321,35 @@ class _AlertCard extends StatelessWidget {
   }
 
   return '${difference.inDays} day ago';
+}
+Widget _medicalRow(
+  String label,
+  dynamic value,
+) {
+  final text = value?.toString().trim();
+
+  if (text == null || text.isEmpty) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        '$label: Not provided',
+        style: const TextStyle(
+          color: Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  return Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Text(
+      '$label: $text',
+      style: const TextStyle(
+        color: Colors.black87,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
 }
 
   @override
@@ -456,6 +490,89 @@ if (alert['officer_name'] != null) ...[
                 ),
               ],
             ),
+            // Medical information
+if (alert['medical_shared'] == true) ...[
+  const SizedBox(height: 12),
+
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: Colors.blue.shade200,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.medical_information_outlined,
+              color: Colors.blue.shade700,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'SHARED MEDICAL INFORMATION',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade900,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        _medicalRow(
+          'Blood Group',
+          alert['blood_group'],
+        ),
+
+        _medicalRow(
+          'Allergies',
+          alert['allergies'],
+        ),
+
+        _medicalRow(
+          'Medical Conditions',
+          alert['medical_conditions'],
+        ),
+      ],
+    ),
+  ),
+] else ...[
+  const SizedBox(height: 12),
+
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: const Row(
+      children: [
+        Icon(
+          Icons.lock_outline,
+          color: Colors.grey,
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Medical information was not shared by the citizen.',
+            style: TextStyle(
+              color: Colors.grey,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+],
 
             const SizedBox(height: 12),
 

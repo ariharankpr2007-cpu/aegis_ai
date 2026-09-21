@@ -16,6 +16,8 @@ import 'report_screen.dart';
 import '../common/notification_screen.dart';
 import '../common/session_actions.dart';
 import '../common/settings_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CitizenDashboard extends StatefulWidget {
   const CitizenDashboard({super.key});
@@ -133,6 +135,9 @@ Future<void> _loadLiveWeather() async {
   loading: _weatherLoading,
   error: _weatherError,
 ),
+const SizedBox(height: 18),
+
+_BroadcastAlertsCard(),
             const SizedBox(height: 22),
             _SosButton(
               onPressed: () => Navigator.push(
@@ -394,6 +399,296 @@ class _SafetyStatusCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BroadcastAlertsCard extends StatelessWidget {
+  const _BroadcastAlertsCard();
+
+  Future<void> _openGoogleMaps(
+  BuildContext context,
+  double? latitude,
+  double? longitude,
+) async {
+  if (latitude == null || longitude == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Exact location is unavailable for this alert'),
+      ),
+    );
+    return;
+  }
+
+  final uri = Uri.parse(
+    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+  );
+
+  try {
+  final opened = await launchUrl(
+    uri,
+    mode: LaunchMode.externalApplication,
+  );
+
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Google Maps is not installed or cannot be opened'),
+      ),
+    );
+  }
+} catch (e) {
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Unable to open Google Maps'),
+      ),
+    );
+  }
+}
+}
+
+  void _showAlertDetails(
+    BuildContext context,
+    Map<String, dynamic> data,
+  ) {
+    final latitude = (data['latitude'] as num?)?.toDouble();
+    final longitude = (data['longitude'] as num?)?.toDouble();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        data['title']?.toString() ?? 'Emergency Alert',
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  data['message']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Priority: ${data['priority']?.toString() ?? 'High'}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 18),
+if (latitude != null && longitude != null)
+  SizedBox(
+    width: double.infinity,
+    child: ElevatedButton.icon(
+      icon: const Icon(Icons.map),
+      label: const Text('Open location in Google Maps'),
+      onPressed: () {
+        _openGoogleMaps(context, latitude, longitude);
+      },
+    ),
+  ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+    .collection('broadcast_alerts')
+    .where('status', isEqualTo: 'Active')
+    .limit(5)
+    .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+
+        final alerts = [...(snapshot.data?.docs ?? [])];
+
+alerts.sort((a, b) {
+  final priorityOrder = {
+    'High': 0,
+    'Medium': 1,
+    'Low': 2,
+  };
+
+  final aData = a.data() as Map<String, dynamic>;
+  final bData = b.data() as Map<String, dynamic>;
+
+  final aPriority = aData['priority']?.toString() ?? 'Low';
+  final bPriority = bData['priority']?.toString() ?? 'Low';
+
+  return (priorityOrder[aPriority] ?? 3)
+      .compareTo(priorityOrder[bPriority] ?? 3);
+});
+
+        if (alerts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Card(
+          color: Colors.white,
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Emergency Broadcasts',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...alerts.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final latitude = (data['latitude'] as num?)?.toDouble();
+final longitude = (data['longitude'] as num?)?.toDouble();
+
+                  final priority =
+                      data['priority']?.toString() ?? 'High';
+
+                  final priorityColor = priority == 'High'
+                      ? Colors.red
+                      : priority == 'Medium'
+                          ? Colors.orange
+                          : Colors.green;
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showAlertDetails(context, data),
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: priorityColor.withValues(alpha: 0.08),
+                        border: Border.all(
+                          color: priorityColor.withValues(alpha: 0.35),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  data['title']?.toString() ??
+                                      'Emergency Alert',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                priority,
+                                style: TextStyle(
+                                  color: priorityColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            data['message']?.toString() ?? '',
+                          ),
+                          const SizedBox(height: 6),
+                          if (latitude != null && longitude != null)
+  SizedBox(
+    width: double.infinity,
+    child: ElevatedButton.icon(
+      icon: const Icon(Icons.map),
+      label: const Text('Open location in Google Maps'),
+      onPressed: () {
+        _openGoogleMaps(
+          context,
+          latitude,
+          longitude,
+        );
+      },
+    ),
+  ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

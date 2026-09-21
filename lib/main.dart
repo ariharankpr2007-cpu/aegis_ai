@@ -11,26 +11,45 @@ import 'services/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/cctv/cctv_device_setup_screen.dart';
 import 'screens/officer/satellite_test_screen.dart';
+import 'services/offline_storage_service.dart';
+import 'services/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-);
+  // Local storage must be ready before the app starts.
+  await OfflineStorageService.init();
 
-await FirebaseAppCheck.instance.activate(
-  androidProvider: AndroidProvider.debug,
-);
+  // Start AEGIS immediately.
+  runApp(const AegisAI());
 
-await Supabase.initialize(
-  url: 'https://cdkwzxjneqxsroswkqtc.supabase.co',
-  anonKey: 'sb_publishable_W7lUTqOs_PRppCZGRLrvMg_-FkTkTLz',
-);
+  // Initialize cloud services in the background.
+  _initializeServices();
+}
 
-await NotificationService().initialize();
+Future<void> _initializeServices() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-runApp(const AegisAI());
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+    );
+
+    await Supabase.initialize(
+      url: 'https://cdkwzxjneqxsroswkqtc.supabase.co',
+      anonKey: 'sb_publishable_W7lUTqOs_PRppCZGRLrvMg_-FkTkTLz',
+    );
+
+    await NotificationService().initialize();
+
+    SyncService.start();
+  } catch (e) {
+    debugPrint('Cloud services unavailable: $e');
+
+    // AEGIS continues in offline mode.
+  }
 }
 
 class AegisAI extends StatelessWidget {

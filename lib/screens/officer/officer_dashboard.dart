@@ -18,6 +18,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mission_verification_screen.dart';
 import 'mission_history_screen.dart';
 import 'live_cctv_devices_screen.dart';
+import 'citizen_live_streams_screen.dart';
+import '../../services/offline_storage_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/sms_fallback_service.dart';
 
 class OfficerDashboard extends StatefulWidget {
   const OfficerDashboard({super.key});
@@ -222,15 +226,19 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
 
     final reports = reportSnapshot.data!.docs;
 
-    int pending = reports.where((doc) {
-      return doc["status"] == "Pending";
-    }).length;
+int pending = reports.where((doc) {
+  final data = doc.data() as Map<String, dynamic>;
+  return data["status"]?.toString() == "Pending";
+}).length;
 
-    int resolved = reports.where((doc) {
-      return doc["status"] == "Resolved";
-    }).length;
-    int completed = reports.where((doc) {
-  return doc["status"] == "Completed";
+int resolved = reports.where((doc) {
+  final data = doc.data() as Map<String, dynamic>;
+  return data["status"]?.toString() == "Resolved";
+}).length;
+
+int completed = reports.where((doc) {
+  final data = doc.data() as Map<String, dynamic>;
+  return data["status"]?.toString() == "Completed";
 }).length;
 
     int totalReports = reports.length;
@@ -340,6 +348,23 @@ _MetricCard(
   Icons.rate_review_outlined,
   Colors.orange,
 ),
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('citizenLiveStreams')
+      .where('status', isEqualTo: 'live')
+      .snapshots(),
+  builder: (context, snapshot) {
+    final liveCitizenStreams =
+        snapshot.data?.docs.length ?? 0;
+
+    return _MetricCard(
+      "Citizen Live",
+      liveCitizenStreams.toString(),
+      Icons.live_tv,
+      Colors.red,
+    );
+  },
+),
 
                    ],
         );
@@ -376,6 +401,77 @@ _MetricCard(
 ),
 _action(
   context,
+  Icons.cloud_off,
+  "TEST Offline Storage",
+  () async {
+    await OfflineStorageService.addToQueue(
+      type: 'emergency',
+      data: {
+        'message': 'CRITICAL FLOOD',
+        'latitude': 13.0827,
+        'longitude': 80.2707,
+        'victims': 4,
+      },
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Emergency saved offline'),
+      ),
+    );
+  },
+),
+_action(
+  context,
+  Icons.notifications_active,
+  "TEST Offline Notification",
+  () async {
+    await NotificationService()
+        .showOfflineEmergencyNotification(
+      title: '🚨 AEGIS OFFLINE ALERT',
+      body: 'Critical flood detected. Officer attention required.',
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Offline notification sent'),
+      ),
+    );
+  },
+),
+_action(
+  context,
+  Icons.sms,
+  "TEST Emergency SMS",
+  () async {
+    final success =
+        await SmsFallbackService.sendEmergencySms(
+      phoneNumber: '9498411460',
+      emergencyType: 'CRITICAL FLOOD',
+      latitude: 13.0827,
+      longitude: 80.2707,
+      victims: 4,
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Emergency SMS sent'
+              : 'Emergency SMS failed',
+        ),
+      ),
+    );
+  },
+),
+_action(
+  context,
   Icons.videocam,
   "Live CCTV",
   () {
@@ -384,6 +480,47 @@ _action(
       MaterialPageRoute(
         builder: (_) =>
             const LiveCctvDevicesScreen(),
+      ),
+    );
+  },
+),
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('citizenLiveStreams')
+      .where('status', isEqualTo: 'live')
+      .snapshots(),
+  builder: (context, snapshot) {
+    final liveCount =
+        snapshot.data?.docs.length ?? 0;
+
+    return _action(
+      context,
+      Icons.live_tv,
+      liveCount > 0
+          ? 'Citizen Live Streams ($liveCount LIVE)'
+          : 'Citizen Live Streams',
+      () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                const CitizenLiveStreamsScreen(),
+          ),
+        );
+      },
+    );
+  },
+),
+_action(
+  context,
+  Icons.live_tv,
+  "Citizen Live Streams",
+  () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const CitizenLiveStreamsScreen(),
       ),
     );
   },
@@ -440,7 +577,7 @@ _action(
               Navigator.push(
   context,
   MaterialPageRoute(
-    builder: (_) => const LiveMapScreen(),
+    builder: (_) => LiveDisasterMapScreen(),
   ),
 );
             },

@@ -30,6 +30,13 @@ android {
         versionName = flutter.versionName
     }
 
+    configurations.configureEach {
+    exclude(
+        group = "com.google.mlkit",
+        module = "linkfirebase"
+    )
+}
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -40,14 +47,10 @@ android {
     dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.16.0"))
     implementation("com.google.firebase:firebase-appcheck-debug")
+    implementation("com.google.firebase:firebase-messaging")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
-    configurations.configureEach {
-    exclude(
-        group = "com.google.firebase",
-        module = "firebase-iid"
-    )
-}
+    
 }
 
 kotlin {

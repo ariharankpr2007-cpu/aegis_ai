@@ -111,7 +111,7 @@ const SizedBox(height: 10),
       child: StreamBuilder<QuerySnapshot>(
   stream: FirebaseFirestore.instance
       .collection("reports")
-      .orderBy("timestamp", descending: true)
+      .orderBy("createdAt", descending: true)
       .snapshots(),
   builder: (context, snapshot) {
     if (snapshot.hasError) {
